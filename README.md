@@ -26,7 +26,6 @@ sph/
 │   └── test_density.py
 │
 ├── examples/
-│   ├── run_demo.py
 │   └── run_dambreak.py
 │
 ├── pyproject.toml
@@ -107,14 +106,7 @@ with typical parameters:
 The acceleration is computed as:
 
 $$
-\frac{d\mathbf{v}_i}{dt} =
-- \sum_j m_j
-\left(
-\frac{p_i}{\rho_i^2} + \frac{p_j}{\rho_j^2}
-\right)
-\nabla W_{ij}
-+ \text{viscosity}
-+ \text{boundary forces}.
+\frac{d\mathbf{v}_i}{dt} = - \sum_j m_j \left(\frac{p_i}{\rho_i^2} + \frac{p_j}{\rho_j^2} \right) \nabla W_{ij} + \text{viscosity} + \text{boundary forces}.
 $$
 
 Artificial viscosity follows Monaghan (1992).
