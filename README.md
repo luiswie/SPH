@@ -19,15 +19,15 @@ sph/
 │       ├── density.py
 │       ├── momentum.py
 │       ├── integrator.py
-│       ├── boundaries.py
-│       └── run_dambreak.py
+│       └── boundaries.py
 │
 ├── tests/
 │   ├── test_kernel.py
 │   └── test_density.py
 │
 ├── examples/
-│   └── run_demo.py
+│   ├── run_demo.py
+│   └── run_dambreak.py
 │
 ├── pyproject.toml
 ├── setup.cfg
@@ -143,7 +143,7 @@ pytest -q
 A simple 2D dam-break example is included:
 
 ```
-python -m sph.run_dambreak
+python -m examples.run_dambreak
 ```
 
 This generates particle trajectories and optionally frame-by-frame PNG output.
@@ -153,7 +153,6 @@ This generates particle trajectories and optionally frame-by-frame PNG output.
 # **Visualization**
 
 The project includes a minimal Matplotlib-based visualizer.  
-You can also export VTK files for ParaView by extending `run_dambreak.py`.
 
 ---
 

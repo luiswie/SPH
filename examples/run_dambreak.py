@@ -5,12 +5,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Absolute imports (package must be importable; run with: python -m src.sph.run_dambreak)
-from src.sph.kernel import cubic_spline_W, cubic_spline_gradW
-from src.sph.neighbors import grid_neighbors
-from src.sph.density import compute_density, tait_pressure
-from src.sph.momentum import compute_accelerations
-from src.sph.integrator import symplectic_euler
-from src.sph.boundaries import apply_reflective_walls
+from sph.kernel import cubic_spline_W, cubic_spline_gradW
+from sph.neighbors import grid_neighbors
+from sph.density import compute_density, tait_pressure
+from sph.momentum import compute_accelerations
+from sph.integrator import symplectic_euler
+from sph.boundaries import apply_reflective_walls
 
 def setup_column(dx=0.02, width=0.1, height=0.2, offset=(0.02,0.02)):
     nx = max(1, int(np.ceil(width / dx)))
