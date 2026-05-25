@@ -4,9 +4,9 @@ import numpy as np
 def cubic_spline_W(r, h):
     """Scalar kernel value for distance r and smoothing length h."""
     q = r / h
-    sigma = 10.0 / (7.0 * np.pi * h * h)
+    sigma = 10.0 / (7.0 * np.pi * h * h) # normalization constant
     if q <= 1.0:
-        return sigma * (1.0 - 1.5*q*q + 0.75*q*q*q)
+        return sigma * (0.25 * (2.0 - q)**3 - (1.0 - q)**3)
     elif q <= 2.0:
         return sigma * 0.25 * (2.0 - q)**3
     return 0.0

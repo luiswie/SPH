@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 # Absolute imports (package must be importable; run with: python -m src.sph.run_dambreak)
 from sph.kernel import cubic_spline_W, cubic_spline_gradW
 from sph.neighbors import grid_neighbors
+from sph.adaptive_h import update_smoothing_lengths
 from sph.density import compute_density, tait_pressure
 from sph.momentum import compute_accelerations
 from sph.integrator import symplectic_euler
@@ -24,7 +25,6 @@ def setup_column(dx=0.02, width=0.1, height=0.2, offset=(0.02,0.02)):
 def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
     # domain
     Lx, Ly = 1.6, 0.6
-    h = 1.5 - 2.0 * dx 
     rho0 = 1000.0
     # choose c0 relative to expected velocities; keep low for speed but stable
     c0 = 10.0
@@ -32,7 +32,8 @@ def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
 
     x = setup_column(dx=dx, width=0.1, height=0.2, offset=(0.02, 0.02)) # x, y positions of particles
     N = x.shape[0] # number of particles
-    print(f"Running with dx={dx:.4f}, N={N}, h={h:.4f}, dt={dt:.5f}, steps={steps}")
+    h = np.full(N, 0.1)   # initial guess for smoothing length (will be updated adaptively)
+    print(f"Running with dx={dx:.4f}, N={N}, dt={dt:.5f}, steps={steps}")
     v = np.zeros_like(x) # initial velocities
     m = (dx*dx*rho0) * np.ones(N) # mass of each particle (assuming uniform density and spacing)
 
@@ -42,23 +43,32 @@ def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
 
     try:
         for step in range(steps):
-            # neighbor list (fast grid)
+
+            # neighbor list
             neigh = grid_neighbors(x, h, domain=(0.0, Lx, 0.0, Ly))
 
-            # density (use neighbor list to speed up)
+            # adaptive smoothing lengths
+            h = update_smoothing_lengths(x, m, h)
+
+            # density
             rho = np.zeros(N)
             for i in range(N):
-                s = 0.0
-                # include self contribution
-                s += m[i] * cubic_spline_W(0.0, h) 
+                hi = h[i]
+                s = m[i] * cubic_spline_W(0.0, hi)
                 for j in neigh[i]:
                     r = np.linalg.norm(x[i] - x[j])
-                    s += m[j] * cubic_spline_W(r, h)
+                    s += m[j] * cubic_spline_W(r, hi)
                 rho[i] = s
 
-            # pressure and acceleration
+            # pressure
             p = tait_pressure(rho, rho0, c0)
-            a = compute_accelerations(x, v, m, rho, p, h, alpha=0.1, c0=10.0, g=np.array([0.0, 0.0]))
+
+            # acceleration
+            a = compute_accelerations(
+                x, v, m, rho, p, h,
+                alpha=alpha, c0=c0,
+                g=np.array([0.0, -9.81])
+            )
 
             # integrate
             x, v = symplectic_euler(x, v, a, dt)
@@ -66,9 +76,10 @@ def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
             # boundaries
             apply_reflective_walls(x, v, 0.0, Lx, 0.0, Ly, damping=-0.5)
 
-            # simple sanity checks to catch blowups early
+            # sanity check
             if np.any(np.isnan(x)) or np.any(np.isnan(v)) or np.any(np.isnan(rho)):
                 raise RuntimeError(f"NaN detected at step {step}")
+
 
             if step % 50 == 0:
                 print(f"step {step}/{steps}")
@@ -94,4 +105,4 @@ def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
 
 if __name__ == "__main__":
     # run with very coarse spacing to ensure it completes quickly
-    run(dx=0.03, steps=10000, dt=0.0015, show_plot=True)
+    run(dx=0.025, steps=10000, dt=0.0015, show_plot=True)

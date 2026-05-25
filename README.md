@@ -1,4 +1,4 @@
-# **SPH — Minimal, Modular Smoothed Particle Hydrodynamics Solver in Python**
+# **SPH — Minimal, Modular, 2D Smoothed Particle Hydrodynamics Solver in Python**
 
 A clean, educational, and fully modular implementation of **Weakly Compressible Smoothed Particle Hydrodynamics (WCSPH)** in Python.
 
@@ -43,7 +43,8 @@ The solver is intentionally decomposed into small, testable modules to make the 
 This project implements the standard **WCSPH formulation** with:
 
 - Cubic spline kernel  
-- Density summation  
+- Density summation
+- Adaptive smoothing length
 - Tait equation of state  
 - Symmetric pressure forces  
 - Monaghan artificial viscosity  
@@ -53,12 +54,12 @@ This project implements the standard **WCSPH formulation** with:
 
 ## **Kernel Function**
 
-The cubic spline kernel in 3D is defined as:
+The cubic spline kernel in 2D is defined as:
 
 $$
-W(r, h) = \frac{1}{\pi h^3}
+W(r, h) = \frac{10}{7\pi h^2}
 \begin{cases}
-1 - \frac{3}{2}q^2 + \frac{3}{4}q^3, & 0 \le q < 1 \\
+\frac{1}{4}(2-q)^3-(1-q)^3, & 0 \le q < 1 \\
 \frac{1}{4}(2 - q)^3, & 1 \le q < 2 \\
 0, & q \ge 2
 \end{cases}
@@ -79,10 +80,23 @@ The gradient is implemented analytically for numerical stability.
 The density of particle \( i \) is computed as:
 
 $$
-\rho_i = \sum_j m_j W(r_{ij}, h).
+\rho_i = \sum_j m_j W(r_{ij}, h_i).
 $$
 
 This avoids solving a continuity equation and is standard in WCSPH.
+
+---
+
+## **Smoothing Length**
+
+Each particle adapts its own smoothing lenght $h_i$ based on the local density:
+
+$$
+h_i = \eta \left( \frac{m_i}{\rho_i} \right)^{1/2}.
+$$
+
+Because $\rho_i$ depends on $h_i$, and $h_i$ depends on $\rho_i$, the two are solved together using a small Newton iteration.  
+This keeps the **neighbor number roughly constant**, improves stability, and ensures the resolution follows the flow naturally.
 
 ---
 
@@ -96,8 +110,8 @@ $$
 
 with typical parameters:
 
-- \( \gamma = 7 \)  
-- \( c_0 \) chosen such that Mach ≈ 0.1  
+- \( $\gamma = 7$ \)  
+- \( $c_0$ \) chosen such that Mach ≈ 0.1  
 
 ---
 
@@ -110,6 +124,12 @@ $$
 $$
 
 Artificial viscosity follows Monaghan (1992).
+
+---
+
+## **Boundary Conditions**
+
+The solver uses **simple reflective walls**: when a particle crosses a domain boundary, its position is clamped to the wall and the corresponding velocity component is reversed and damped. This enforces a no‑penetration condition and provides a minimal, robust boundary treatment suitable for basic tests such as the dam‑break.
 
 ---
 

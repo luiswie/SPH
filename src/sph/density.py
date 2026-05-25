@@ -3,14 +3,13 @@ import numpy as np
 from .kernel import cubic_spline_W
 
 def compute_density(positions, masses, h):
-    N = positions.shape[0]
+    """Density with a given smoothing length h (per particle)."""
+    N = len(positions)
     rho = np.zeros(N)
     for i in range(N):
-        s = 0.0
         for j in range(N):
-            r = np.linalg.norm(positions[i] - positions[j])
-            s += masses[j] * cubic_spline_W(r, h)
-        rho[i] = s
+            rij = np.linalg.norm(positions[i] - positions[j])
+            rho[i] += masses[j] * cubic_spline_W(rij, h[i])
     return rho
 
 def tait_pressure(rho, rho0, c0, gamma=7.0):
