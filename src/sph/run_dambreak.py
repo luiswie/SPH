@@ -30,12 +30,11 @@ def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
     c0 = 10.0
     alpha = 0.1
 
-    # initial particles: much smaller column to reduce N
-    x = setup_column(dx=dx, width=0.1, height=0.2, offset=(0.02, 0.02))
-    N = x.shape[0]
+    x = setup_column(dx=dx, width=0.1, height=0.2, offset=(0.02, 0.02)) # x, y positions of particles
+    N = x.shape[0] # number of particles
     print(f"Running with dx={dx:.4f}, N={N}, h={h:.4f}, dt={dt:.5f}, steps={steps}")
-    v = np.zeros_like(x)
-    m = (dx*dx*rho0) * np.ones(N)
+    v = np.zeros_like(x) # initial velocities
+    m = (dx*dx*rho0) * np.ones(N) # mass of each particle (assuming uniform density and spacing)
 
     if show_plot:
         plt.ion()
@@ -51,7 +50,7 @@ def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
             for i in range(N):
                 s = 0.0
                 # include self contribution
-                s += m[i] * cubic_spline_W(0.0, h)
+                s += m[i] * cubic_spline_W(0.0, h) 
                 for j in neigh[i]:
                     r = np.linalg.norm(x[i] - x[j])
                     s += m[j] * cubic_spline_W(r, h)
@@ -59,25 +58,7 @@ def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
 
             # pressure and acceleration
             p = tait_pressure(rho, rho0, c0)
-            a = np.zeros_like(x)
-            for i in range(N):
-                ai = np.zeros(2)
-                for j in neigh[i]:
-                    rij = x[i] - x[j]
-                    r = np.linalg.norm(rij)
-                    if r == 0.0 or r > 2.0*h:
-                        continue
-                    pij = (p[i] / (rho[i]**2) + p[j] / (rho[j]**2))
-                    grad = cubic_spline_gradW(rij, h)
-                    ai -= m[j] * pij * grad
-                    vij = v[i] - v[j]
-                    vr = np.dot(vij, rij)
-                    if vr < 0:
-                        mu = (-alpha * c0 * vr) / (r*r + 0.01*h*h)
-                        rho_ij = 0.5 * (rho[i] + rho[j])
-                        ai -= m[j] * (mu / rho_ij) * grad
-                ai += np.array([0.0, -9.81])
-                a[i] = ai
+            a = compute_accelerations(x, v, m, rho, p, h, alpha=0.1, c0=10.0, g=np.array([0.0, 0.0]))
 
             # integrate
             x, v = symplectic_euler(x, v, a, dt)

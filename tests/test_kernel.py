@@ -1,4 +1,4 @@
-from src.SPH.kernel import cubic_spline_W, cubic_spline_gradW
+from sph.kernel import cubic_spline_W, cubic_spline_gradW
 import numpy as np
 
 def test_kernel_symmetry():
