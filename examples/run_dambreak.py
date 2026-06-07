@@ -1,17 +1,17 @@
-# src/sph/run_dambreak.py
 import sys
 import traceback
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Absolute imports (package must be importable; run with: python -m src.sph.run_dambreak)
 from sph.kernel import cubic_spline_W, cubic_spline_gradW
 from sph.neighbors import grid_neighbors
 from sph.adaptive_h import update_smoothing_lengths
-from sph.density import compute_density, tait_pressure
+from sph.density import compute_density
+from sph.eos import tait_pressure
 from sph.momentum import compute_accelerations
 from sph.integrator import symplectic_euler
 from sph.boundaries import apply_reflective_walls
+from sph.state import SPHState   # <-- new
 
 def setup_column(dx=0.02, width=0.1, height=0.2, offset=(0.02,0.02)):
     nx = max(1, int(np.ceil(width / dx)))
@@ -23,19 +23,23 @@ def setup_column(dx=0.02, width=0.1, height=0.2, offset=(0.02,0.02)):
     return np.array(pts, dtype=float)
 
 def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
-    # domain
     Lx, Ly = 1.6, 0.6
     rho0 = 1000.0
-    # choose c0 relative to expected velocities; keep low for speed but stable
     c0 = 10.0
     alpha = 0.1
 
-    x = setup_column(dx=dx, width=0.1, height=0.2, offset=(0.02, 0.02)) # x, y positions of particles
-    N = x.shape[0] # number of particles
-    h = np.full(N, 0.1)   # initial guess for smoothing length (will be updated adaptively)
-    print(f"Running with dx={dx:.4f}, N={N}, dt={dt:.5f}, steps={steps}")
-    v = np.zeros_like(x) # initial velocities
-    m = (dx*dx*rho0) * np.ones(N) # mass of each particle (assuming uniform density and spacing)
+    x = setup_column(dx=dx, width=0.1, height=0.2, offset=(0.02, 0.02))
+    N = x.shape[0]
+    h = np.full(N, 1.2 * dx)
+    v = np.zeros_like(x)
+    m = (dx*dx*rho0) * np.ones(N)
+    rho = np.zeros(N)
+    p = np.zeros(N)
+    a = np.zeros_like(x)
+
+    state = SPHState(x=x, v=v, m=m, rho=rho, p=p, h=h, a=a)
+
+    print(f"Running with dx={dx:.4f}, N={state.N}, dt={dt:.5f}, steps={steps}")
 
     if show_plot:
         plt.ion()
@@ -44,48 +48,38 @@ def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
     try:
         for step in range(steps):
 
-            # neighbor list
-            neigh = grid_neighbors(x, h, domain=(0.0, Lx, 0.0, Ly))
+            # 1. update h using OLD density (predictor)
+            state.h[:] = update_smoothing_lengths(state.x, state.m, state.h)
 
-            # adaptive smoothing lengths
-            h = update_smoothing_lengths(x, m, h)
+            # 2. recompute neighbors using NEW h
+            neigh = grid_neighbors(state.x, state.h, domain=(0.0, Lx, 0.0, Ly))
 
-            # density
-            rho = np.zeros(N)
-            for i in range(N):
-                hi = h[i]
-                s = m[i] * cubic_spline_W(0.0, hi)
-                for j in neigh[i]:
-                    r = np.linalg.norm(x[i] - x[j])
-                    s += m[j] * cubic_spline_W(r, hi)
-                rho[i] = s
+            # 3. compute density using symmetric kernel
+            state.rho[:] = compute_density(state.x, state.m, state.h, neigh)
 
-            # pressure
-            p = tait_pressure(rho, rho0, c0)
+            # 4. compute pressure
+            state.p[:] = tait_pressure(state.rho, rho0, c0)
 
-            # acceleration
-            a = compute_accelerations(
-                x, v, m, rho, p, h,
+            # 5. compute accelerations
+            state.a[:] = compute_accelerations(
+                state.x, state.v, state.m, state.rho, state.p, state.h,
                 alpha=alpha, c0=c0,
                 g=np.array([0.0, -9.81])
             )
 
-            # integrate
-            x, v = symplectic_euler(x, v, a, dt)
+            # 6. symplectic Euler update
+            state.x, state.v = symplectic_euler(state.x, state.v, state.a, dt)
 
-            # boundaries
-            apply_reflective_walls(x, v, 0.0, Lx, 0.0, Ly, damping=-0.5)
+            apply_reflective_walls(state.x, state.v, 0.0, Lx, 0.0, Ly, damping=-0.5)
 
-            # sanity check
-            if np.any(np.isnan(x)) or np.any(np.isnan(v)) or np.any(np.isnan(rho)):
+            if np.any(np.isnan(state.x)) or np.any(np.isnan(state.v)) or np.any(np.isnan(state.rho)):
                 raise RuntimeError(f"NaN detected at step {step}")
-
 
             if step % 50 == 0:
                 print(f"step {step}/{steps}")
                 if show_plot:
                     ax.clear()
-                    ax.scatter(x[:,0], x[:,1], s=8, c='C0')
+                    ax.scatter(state.x[:,0], state.x[:,1], s=8, c='C0')
                     ax.set_xlim(0, Lx); ax.set_ylim(0, Ly)
                     ax.set_title(f"step {step}")
                     plt.pause(0.01)
@@ -93,8 +87,11 @@ def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
     except Exception as e:
         print("Simulation crashed at step:", step)
         traceback.print_exc()
-        # write a small diagnostic file
-        np.savez("crash_snapshot.npz", positions=x, velocities=v, masses=m, rho=rho)
+        np.savez("crash_snapshot.npz",
+                 positions=state.x,
+                 velocities=state.v,
+                 masses=state.m,
+                 rho=state.rho)
         print("Saved crash_snapshot.npz for inspection.")
         raise
 
@@ -104,5 +101,4 @@ def run(dx=0.02, steps=300, dt=0.001, show_plot=True):
             plt.show()
 
 if __name__ == "__main__":
-    # run with very coarse spacing to ensure it completes quickly
     run(dx=0.025, steps=10000, dt=0.0015, show_plot=True)
